@@ -39,6 +39,7 @@ parser.add_argument('--batch_size', type=int, default=32, help='')
 parser.add_argument('--no_final_step_noise', action='store_true', default=False, help='Use no noise in the final step of the reverse diffusion')
 parser.add_argument('--inference_steps', type=int, default=20, help='Number of denoising steps')
 parser.add_argument('--actual_steps', type=int, default=None, help='Number of denoising steps that are actually performed')
+parser.add_argument('--export_onnx', action='store_true', default=False, help='Export the model to ONNX')
 args = parser.parse_args()
 
 os.makedirs(args.out_dir, exist_ok=True)
@@ -100,56 +101,57 @@ model.load_state_dict(state_dict, strict=True)
 model = model.to(device)
 model.eval()
 
-# All random values
-num_ligand_nodes = 23
-num_receptor_nodes = 416
-num_atom_nodes = 100
-num_features = 1281
-num_edges = num_ligand_nodes * num_receptor_nodes
+if args.export_onnx:
+    # All random values
+    num_ligand_nodes = 23
+    num_receptor_nodes = 416
+    num_atom_nodes = 100
+    num_features = 1281
+    num_edges = num_ligand_nodes * num_receptor_nodes
 
-dummy_data = {
-    'ligand': {
-        'ligand':{
-            'edge_index':torch.zeros((2, num_edges), dtype=torch.long),
-            'edge_attr': torch.zeros((num_edges, 4))
+    dummy_data = {
+        'ligand': {
+            'ligand':{
+                'edge_index':torch.zeros((2, num_edges), dtype=torch.long),
+                'edge_attr': torch.zeros((num_edges, 4))
+            },
+            'x': torch.zeros((num_ligand_nodes, num_features)),
+            'pos': torch.zeros((num_ligand_nodes, 3)),
+            'edge_mask': torch.ones((num_ligand_nodes,)),
+            'batch': torch.zeros((num_ligand_nodes,), dtype=torch.long),
+            'ptr': torch.tensor([0, num_ligand_nodes], dtype=torch.long),
+            'node_t': {
+                'tr': torch.zeros((num_ligand_nodes,)),
+                'rot': torch.zeros((num_ligand_nodes,)),
+                'tor': torch.zeros((num_ligand_nodes,)),
+            }
         },
-        'x': torch.zeros((num_ligand_nodes, num_features)),
-        'pos': torch.zeros((num_ligand_nodes, 3)),
-        'edge_mask': torch.ones((num_ligand_nodes,)),
-        'batch': torch.zeros((num_ligand_nodes,), dtype=torch.long),
-        'ptr': torch.tensor([0, num_ligand_nodes], dtype=torch.long),
-        'node_t': {
+        'receptor': {
+            'x': torch.zeros((num_receptor_nodes, num_features)),
+            'pos': torch.zeros((num_receptor_nodes, 3)),
+            'mu_r_norm': torch.zeros((num_receptor_nodes, 5)),
+            'side_chain_vecs': torch.zeros((num_receptor_nodes, 2, 3)),
+            'batch': torch.zeros((num_receptor_nodes,), dtype=torch.long),
+            'ptr': torch.tensor([0, num_receptor_nodes], dtype=torch.long),
+        },
+        'atom': {
+            'x': torch.zeros((num_atom_nodes, num_features)),
+            'pos': torch.zeros((num_atom_nodes, 3)),
+            'edge_mask': torch.ones((num_atom_nodes,)),
+            'batch': torch.zeros((num_atom_nodes,), dtype=torch.long),
+            'ptr': torch.tensor([0, num_atom_nodes], dtype=torch.long),
+        },
+        # ... other components ...
+        'complex_t': {
             'tr': torch.zeros((num_ligand_nodes,)),
             'rot': torch.zeros((num_ligand_nodes,)),
             'tor': torch.zeros((num_ligand_nodes,)),
-        }
-    },
-    'receptor': {
-        'x': torch.zeros((num_receptor_nodes, num_features)),
-        'pos': torch.zeros((num_receptor_nodes, 3)),
-        'mu_r_norm': torch.zeros((num_receptor_nodes, 5)),
-        'side_chain_vecs': torch.zeros((num_receptor_nodes, 2, 3)),
-        'batch': torch.zeros((num_receptor_nodes,), dtype=torch.long),
-        'ptr': torch.tensor([0, num_receptor_nodes], dtype=torch.long),
-    },
-    'atom': {
-        'x': torch.zeros((num_atom_nodes, num_features)),
-        'pos': torch.zeros((num_atom_nodes, 3)),
-        'edge_mask': torch.ones((num_atom_nodes,)),
-        'batch': torch.zeros((num_atom_nodes,), dtype=torch.long),
-        'ptr': torch.tensor([0, num_atom_nodes], dtype=torch.long),
-    },
-    # ... other components ...
-    'complex_t': {
-        'tr': torch.zeros((num_ligand_nodes,)),
-        'rot': torch.zeros((num_ligand_nodes,)),
-        'tor': torch.zeros((num_ligand_nodes,)),
-    },
-    'num_graphs': 1,
-}
+        },
+        'num_graphs': 1,
+    }
 
-torch.onnx.export(model, (data.to_tensor(), data.to_tensor()), 'network.onnx', verbose=True) 
-# input_names=['data'], output_names=['tr_pred', 'rot_pred', 'tor_pred'])
+    torch.onnx.export(model, (data.to_tensor(), data.to_tensor()), 'network.onnx', verbose=True) 
+    # input_names=['data'], output_names=['tr_pred', 'rot_pred', 'tor_pred'])
 
 if args.confidence_model_dir is not None:
     confidence_model = get_model(confidence_args, device, t_to_sigma=t_to_sigma, no_parallel=True, confidence_mode=True)
