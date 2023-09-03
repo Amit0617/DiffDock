@@ -467,5 +467,8 @@ class GaussianSmearing(torch.nn.Module):
         self.register_buffer('offset', offset)
 
     def forward(self, dist):
+        device = torch.device('cuda' if dist.is_cuda else 'cpu')
+        dist = dist.to(device)
+        self.offset = self.offset.to(device)
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
         return torch.exp(self.coeff * torch.pow(dist, 2))
