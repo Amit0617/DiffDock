@@ -150,7 +150,7 @@ if args.export_onnx:
         'num_graphs': 1,
     }
 
-    torch.onnx.export(model, (data.to_tensor(), data.to_tensor()), 'network.onnx', verbose=True) 
+    torch.onnx.export(model, (dummy_data, dummy_data), 'network.onnx', verbose=True) 
     # input_names=['data'], output_names=['tr_pred', 'rot_pred', 'tor_pred'])
 
 if args.confidence_model_dir is not None:
