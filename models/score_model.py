@@ -232,6 +232,35 @@ class TensorProductScoreModel(torch.nn.Module):
                 )
 
     def forward(self, data):
+
+        if(type(data) == dict):
+            class CustomData:
+                def __init__(self, data_dict):
+                    for key, value in data_dict.items():
+                        if isinstance(value, dict):
+                            setattr(self, key, CustomData(value))
+                        else:
+                            setattr(self, key, value)
+
+                def __getitem__(self, key):
+                    if isinstance(key, str):
+                        return getattr(self, key)
+                    elif isinstance(key, tuple):
+                        result = self
+                        for subkey in key:
+                            result = getattr(result, subkey)
+                        return result
+                    else:
+                        raise KeyError("Key must be a string or tuple")
+
+                def __getattr__(self, key):
+                    if hasattr(self, key):
+                        return getattr(self, key)
+                    raise AttributeError(f"'CustomData' object has no attribute '{key}'")
+            
+            data1 = data
+            data = CustomData(data1)
+
         if not self.confidence_mode:
             tr_sigma, rot_sigma, tor_sigma = self.t_to_sigma(*[data.complex_t[noise_type] for noise_type in ['tr', 'rot', 'tor']])
         else:
